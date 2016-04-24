@@ -19,7 +19,7 @@ package common;
 public class TestConstants {
 
   // Test data constants
-  public static final int TEST_SERVER_PORT = 9001;
+  public static final int TEST_SERVER_PORT = 9010;
   public static final String BASE_URL = "http://localhost:" + TEST_SERVER_PORT;
   public static final String TEST_DATA_FILE = "test/resources/test-init.sql";
   public static final int RESPONSE_TIMEOUT = 3000; // milliseconds

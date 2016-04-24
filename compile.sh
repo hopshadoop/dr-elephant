@@ -98,7 +98,7 @@ unzip ${ZIP_NAME}
 rm ${ZIP_NAME}
 DIST_NAME=${ZIP_NAME%.zip}
 
-chmod +x ${DIST_NAME}/bin/dr-elephant
+chmod u+x ${DIST_NAME}/bin/dr-elephant
 
 # Append hadoop classpath and the ELEPHANT_CONF_DIR to the Classpath
 sed -i.bak $'/declare -r app_classpath/s/.$/:`hadoop classpath`:${ELEPHANT_CONF_DIR}"/' ${DIST_NAME}/bin/dr-elephant

@@ -92,8 +92,8 @@ db_loc="jdbc:mysql://"$db_url"/"$db_name"?characterEncoding=UTF-8"
 # db_password is optional. default is ""
 db_password="${db_password:-""}"
 
-#port is optional. default is 8080
-port="${port:-8080}"
+#port is optional. default is 8089
+port="${port:-8089}"
 echo "http port: " $port
 
 # Check for keytab_user, keytab_location and application_secret in the elephant.conf
