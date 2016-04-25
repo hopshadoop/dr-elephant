@@ -19,21 +19,21 @@
 CREATE TABLE yarn_app_result (
   id              VARCHAR(50)   NOT NULL,
   name            TEXT          NOT NULL,
-  username        TEXT          NOT NULL,
+  username        VARCHAR(50)   NOT NULL,
   queue_name      TEXT          DEFAULT NULL,
   start_time      BIGINT        UNSIGNED NOT NULL,
   finish_time     BIGINT        UNSIGNED NOT NULL,
   tracking_url    TEXT          NOT NULL,
-  job_type        TEXT          NOT NULL,
+  job_type        VARCHAR(50)   NOT NULL,
   severity        TINYINT(2)    UNSIGNED NOT NULL,
   score           MEDIUMINT(9)  UNSIGNED DEFAULT 0,
   workflow_depth  TINYINT(2)    UNSIGNED DEFAULT 0,
   scheduler       TEXT          DEFAULT NULL,
   job_name        TEXT          NOT NULL,
   job_exec_id     TEXT          NOT NULL,
-  flow_exec_id    TEXT          NOT NULL,
-  job_def_id      TEXT          NOT NULL,
-  flow_def_id     TEXT          NOT NULL,
+  flow_exec_id    VARCHAR(128)   NOT NULL,
+  job_def_id      VARCHAR(128)   NOT NULL,
+  flow_def_id     VARCHAR(128)   NOT NULL,
   job_exec_url    TEXT          NOT NULL,
   flow_exec_url   TEXT          NOT NULL,
   job_def_url     TEXT          NOT NULL,
@@ -49,10 +49,9 @@ create index yarn_app_result_i5 on yarn_app_result (job_def_id);
 create index yarn_app_result_i6 on yarn_app_result (flow_def_id);
 create index yarn_app_result_i7 on yarn_app_result (start_time);
 
-
 CREATE TABLE yarn_app_heuristic_result (
   id                  INT(11)       NOT NULL AUTO_INCREMENT,
-  yarn_app_result_id  VARCHAR(50)   NOT NULL,
+  yarn_app_result_id  VARCHAR(128)   NOT NULL,
   heuristic_class     TEXT          NOT NULL,
   heuristic_name      TEXT          NOT NULL,
   severity            TINYINT(2)    UNSIGNED NOT NULL,
@@ -69,7 +68,6 @@ CREATE TABLE yarn_app_heuristic_result_details (
   name                          VARCHAR(128)     NOT NULL DEFAULT '',
   value                         TEXT             NOT NULL,
   details                       TEXT                             ,
-
   PRIMARY KEY (yarn_app_heuristic_result_id,name),
   CONSTRAINT yarn_app_heuristic_result_details_f1 FOREIGN KEY (yarn_app_heuristic_result_id) REFERENCES yarn_app_heuristic_result (id)
 );
