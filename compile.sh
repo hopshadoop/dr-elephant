@@ -22,9 +22,9 @@ function print_usage(){
 
 function play_command() {
   if type activator 2>/dev/null; then
-    activator "$@"
+    activator "$@" -Dhttp.address=10.0.2.15 -Dhttp.port=11000
   else
-    play "$@"
+    play "$@" -Dhttp.address=10.0.2.15 -Dhttp.port=11000
   fi
 }
 

@@ -18,26 +18,26 @@
 
 CREATE TABLE yarn_app_result (
   id              VARCHAR(50)   NOT NULL,
-  name            TEXT          NOT NULL,
+  name            TEXT          ,
   username        VARCHAR(50)   NOT NULL,
-  queue_name      TEXT          DEFAULT NULL,
+  queue_name      TEXT          ,
   start_time      BIGINT        UNSIGNED NOT NULL,
   finish_time     BIGINT        UNSIGNED NOT NULL,
-  tracking_url    TEXT          NOT NULL,
-  job_type        VARCHAR(50)   NOT NULL,
+  tracking_url    TEXT          ,
+  job_type        VARCHAR(50)   NOT NULL DEFAULT '',
   severity        TINYINT(2)    UNSIGNED NOT NULL,
   score           MEDIUMINT(9)  UNSIGNED DEFAULT 0,
   workflow_depth  TINYINT(2)    UNSIGNED DEFAULT 0,
-  scheduler       TEXT          DEFAULT NULL,
-  job_name        TEXT          NOT NULL,
-  job_exec_id     TEXT          NOT NULL,
-  flow_exec_id    VARCHAR(128)   NOT NULL,
-  job_def_id      VARCHAR(128)   NOT NULL,
-  flow_def_id     VARCHAR(128)   NOT NULL,
-  job_exec_url    TEXT          NOT NULL,
-  flow_exec_url   TEXT          NOT NULL,
-  job_def_url     TEXT          NOT NULL,
-  flow_def_url    TEXT          NOT NULL,                                                          
+  scheduler       TEXT          ,
+  job_name        TEXT          ,
+  job_exec_id     TEXT          ,
+  flow_exec_id    VARCHAR(128)  NOT NULL DEFAULT '',
+  job_def_id      VARCHAR(128)  NOT NULL DEFAULT '',
+  flow_def_id     VARCHAR(128)  NOT NULL DEFAULT '',
+  job_exec_url    TEXT          ,
+  flow_exec_url   TEXT          ,
+  job_def_url     TEXT          ,
+  flow_def_url    TEXT          ,                                                          
   PRIMARY KEY (id)
 );
 
@@ -51,9 +51,9 @@ create index yarn_app_result_i7 on yarn_app_result (start_time);
 
 CREATE TABLE yarn_app_heuristic_result (
   id                  INT(11)       NOT NULL AUTO_INCREMENT,
-  yarn_app_result_id  VARCHAR(128)   NOT NULL,
-  heuristic_class     TEXT          NOT NULL,
-  heuristic_name      TEXT          NOT NULL,
+  yarn_app_result_id  VARCHAR(50)   NOT NULL,
+  heuristic_class     TEXT          ,
+  heuristic_name      VARCHAR(128)  NOT NULL,
   severity            TINYINT(2)    UNSIGNED NOT NULL,
   score               MEDIUMINT(9)  UNSIGNED DEFAULT 0,
   PRIMARY KEY (id),
@@ -66,8 +66,8 @@ create index yarn_app_heuristic_result_i2 on yarn_app_heuristic_result (heuristi
 CREATE TABLE yarn_app_heuristic_result_details (
   yarn_app_heuristic_result_id  INT(11)          NOT NULL,
   name                          VARCHAR(128)     NOT NULL DEFAULT '',
-  value                         TEXT             NOT NULL,
-  details                       TEXT                             ,
+  value                         TEXT             ,
+  details                       TEXT             ,
   PRIMARY KEY (yarn_app_heuristic_result_id,name),
   CONSTRAINT yarn_app_heuristic_result_details_f1 FOREIGN KEY (yarn_app_heuristic_result_id) REFERENCES yarn_app_heuristic_result (id)
 );
