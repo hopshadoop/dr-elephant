@@ -14,6 +14,7 @@ Developer guide: [Click here](https://github.com/linkedin/dr-elephant/wiki/Devel
 
 Administrator guide: [Click here](https://github.com/linkedin/dr-elephant/wiki/Administrator-Guide)
 
+Google groups mailing list: [Click here](https://groups.google.com/forum/#!forum/dr-elephant-users)
 
 ## License
 
