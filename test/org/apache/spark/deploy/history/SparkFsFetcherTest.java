@@ -39,7 +39,7 @@ public class SparkFsFetcherTest {
   private static Document document3 = null;
 
   private static final String spark = "SPARK";
-  private static final String defEventLogDir = "/system/spark-history";
+  private static final String defEventLogDir = "hdfs://10.0.2.15:8020/user/glassfish/sparkApplicationHistory";
   private static final String confEventLogDir = "/custom/configured";
   private static final double defEventLogSize = 100;
   private static final double confEventLogSize = 50;
