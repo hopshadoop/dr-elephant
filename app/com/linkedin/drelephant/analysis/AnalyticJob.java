@@ -19,13 +19,13 @@ package com.linkedin.drelephant.analysis;
 import com.linkedin.drelephant.ElephantContext;
 import com.linkedin.drelephant.util.InfoExtractor;
 import com.linkedin.drelephant.util.Utils;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
 import models.AppHeuristicResult;
 import models.AppHeuristicResultDetails;
 import models.AppResult;
 import org.apache.log4j.Logger;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
@@ -228,8 +228,10 @@ public class AnalyticJob {
    * @return the analysed AppResult
    */
   public AppResult getAnalysis() throws Exception {
+    logger.info("Get Analysis for app: " + getAppId());
     ElephantFetcher fetcher = ElephantContext.instance().getFetcherForApplicationType(getAppType());
     HadoopApplicationData data = fetcher.fetchData(this);
+    logger.info("Hadoop Application Data: " + data.toString());
 
     // Run all heuristics over the fetched data
     List<HeuristicResult> analysisResults = new ArrayList<HeuristicResult>();
