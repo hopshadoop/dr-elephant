@@ -147,7 +147,7 @@ class SparkFSFetcher(fetcherConfData: FetcherConfigurationData) extends Elephant
               null
             }
           } else {
-            val logFilePath = new Path(logPath + "_1.snappy")
+            val logFilePath = new Path(logPath + ".snappy")
             if (!shouldThrottle(logFilePath)) {
               EventLoggingListener.openEventLog(logFilePath, fs)
             } else {
