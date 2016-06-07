@@ -115,6 +115,7 @@ public class JobRuntimeHeuristic implements Heuristic<SparkApplicationData> {
     result.addResultDetail("Spark failed jobs list", getJobsAsString(jobProgressData.getFailedJobDescriptions()));
     result.addResultDetail("Spark average job failure rate", String.format("%.3f", avgJobFailureRate));
     result.addResultDetail("Spark jobs with high task failure rate", getJobsAsString(highFailureRateJobs));
+    logger.info("The size od the Heuristic details is: " + result.getHeuristicResultDetails().size());
 
     return result;
   }

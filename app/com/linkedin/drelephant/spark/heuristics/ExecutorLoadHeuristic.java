@@ -191,7 +191,7 @@ public class ExecutorLoadHeuristic implements Heuristic<SparkApplicationData> {
     result.addResultDetail("Average output size",
         String.format("%s (%s~%s)", MemoryFormatUtils.bytesToString(outputBytes.getAvg()),
             MemoryFormatUtils.bytesToString(outputBytes.getMin()), MemoryFormatUtils.bytesToString(outputBytes.getMax())));
-
+    logger.info("The size od the Heuristic details is: " + result.getHeuristicResultDetails().size());
     return result;
   }
 
