@@ -119,6 +119,7 @@ public class MemoryLimitHeuristic implements Heuristic<SparkApplicationData> {
     result.addResultDetail("Total memory allocated for storage", MemoryFormatUtils.bytesToString(totalStorageMem));
     result.addResultDetail("Total memory used at peak", MemoryFormatUtils.bytesToString(peakMem));
     result.addResultDetail("Memory utilization rate", String.format("%1.3f", peakMem * 1.0 / totalStorageMem));
+    logger.info(" Size of Result Details: " + result.getHeuristicResultDetails().size());
     return result;
   }
 
