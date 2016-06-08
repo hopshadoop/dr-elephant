@@ -38,7 +38,15 @@
     <classname>org.apache.spark.deploy.history.SparkFSFetcher</classname>
     <params>
        <event_log_size_limit_in_mb>100</event_log_size_limit_in_mb>
-       <event_log_dir>/user/glassfish/sparkApplicationHistory</event_log_dir> 
+       <event_log_dir>/user/glassfish/applicationHistory</event_log_dir> 
+    </params>
+   </fetcher>  
+   <fetcher>
+    <applicationtype>HopsWorks-Yarn</applicationtype>
+    <classname>org.apache.spark.deploy.history.SparkFSFetcher</classname>
+    <params>
+       <event_log_size_limit_in_mb>100</event_log_size_limit_in_mb>
+       <event_log_dir>/user/glassfish/applicationHistory</event_log_dir>
     </params>  
 <!--
     <params>
