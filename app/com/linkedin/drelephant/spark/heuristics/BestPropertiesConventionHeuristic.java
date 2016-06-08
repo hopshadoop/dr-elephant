@@ -19,14 +19,15 @@ package com.linkedin.drelephant.spark.heuristics;
 import com.linkedin.drelephant.analysis.Heuristic;
 import com.linkedin.drelephant.analysis.HeuristicResult;
 import com.linkedin.drelephant.analysis.Severity;
+import com.linkedin.drelephant.configurations.heuristic.HeuristicConfigurationData;
 import com.linkedin.drelephant.spark.data.SparkApplicationData;
 import com.linkedin.drelephant.spark.data.SparkEnvironmentData;
-import com.linkedin.drelephant.configurations.heuristic.HeuristicConfigurationData;
 import com.linkedin.drelephant.util.MemoryFormatUtils;
 import com.linkedin.drelephant.util.Utils;
+import org.apache.log4j.Logger;
+
 import java.util.Arrays;
 import java.util.Map;
-import org.apache.log4j.Logger;
 
 
 /**
@@ -106,6 +107,7 @@ public class BestPropertiesConventionHeuristic implements Heuristic<SparkApplica
     result.addResultDetail(SPARK_DRIVER_MEMORY, propertyToString(sparkDriverMemory));
     result.addResultDetail(SPARK_SHUFFLE_MANAGER, propertyToString(sparkShuffleManager));
     result.addResultDetail(SPARK_EXECUTOR_CORES, propertyToString(sparkExecutorCores));
+    logger.info("The size od the Heuristic details is: " + result.getHeuristicResultDetails().size());
 
     return result;
   }
