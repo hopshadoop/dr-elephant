@@ -48,8 +48,8 @@ public class EventLogLimitHeuristic implements Heuristic<SparkApplicationData> {
       result.addResultDetail("Large Log File", "Spark job's event log passes the limit. No actual log data is fetched."
           + " All other heuristic rules will not make sense.", null);
     }
-    else{
-      result.addResultDetail("Log file size", "Spark job's event log does not pass the limit,", null);
+    else if (severity == Severity.NONE) {
+      result.addResultDetail("Log file size", "Spark job's event log does not pass the limit.", null);
     }
     return result;
   }
