@@ -30,7 +30,8 @@ function play_command() {
 
 # Default configurations
 HADOOP_VERSION="2.4.0"
-SPARK_VERSION="1.5.2"
+SPARK_VERSION="1.6.1"
+
 
 # User should pass an optional argument which is a path to config file
 if [ -z "$1" ];
