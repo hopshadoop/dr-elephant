@@ -286,8 +286,7 @@ public class AnalyticJob {
             AppHeuristicResultDetails.VALUE_LIMIT, getAppId());
         heuristicDetail.details = Utils.truncateField(heuristicResultDetails.getDetails(),
             AppHeuristicResultDetails.DETAILS_LIMIT, getAppId());
-        // added for test
-        //detail.yarnAppHeuristicResultDetails = new ArrayList<AppHeuristicResultDetails>();
+
         detail.yarnAppHeuristicResultDetails.add(heuristicDetail);
       }
       result.yarnAppHeuristicResults.add(detail);
