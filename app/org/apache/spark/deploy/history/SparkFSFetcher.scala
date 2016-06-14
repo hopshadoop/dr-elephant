@@ -336,7 +336,7 @@ class SparkFSFetcher(fetcherConfData: FetcherConfigurationData) extends Elephant
 private object SparkFSFetcher {
   private val logger = Logger.getLogger(SparkFSFetcher.getClass)
 
-  var defEventLogDir = "/system/spark-history"
+  var defEventLogDir = "/user/glassfish/sparkApplicationHistory"
   var defEventLogSizeInMb = 100d; // 100MB
 
   val LOG_SIZE_XML_FIELD = "event_log_size_limit_in_mb"

@@ -135,6 +135,7 @@ public class StageRuntimeHeuristic implements Heuristic<SparkApplicationData> {
     result.addResultDetail("Spark stage failed", String.valueOf(failedStages.size()));
     result.addResultDetail("Spark average stage failure rate", String.format("%.3f", avgStageFailureRate));
     result.addResultDetail("Spark problematic stages", getStagesAsString(problematicStages));
+    logger.info("The size od the Heuristic details is: " + result.getHeuristicResultDetails().size());
 
     return result;
   }

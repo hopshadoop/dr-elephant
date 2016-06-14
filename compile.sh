@@ -22,15 +22,16 @@ function print_usage(){
 
 function play_command() {
   if type activator 2>/dev/null; then
-    activator "$@"
+    activator "$@" -Dhttp.address=10.0.2.15 -Dhttp.port=11000
   else
-    play "$@"
+    play "$@" -Dhttp.address=10.0.2.15 -Dhttp.port=11000
   fi
 }
 
 # Default configurations
 HADOOP_VERSION="2.4.0"
 SPARK_VERSION="1.6.1"
+
 
 # User should pass an optional argument which is a path to config file
 if [ -z "$1" ];
@@ -98,7 +99,7 @@ unzip ${ZIP_NAME}
 rm ${ZIP_NAME}
 DIST_NAME=${ZIP_NAME%.zip}
 
-chmod +x ${DIST_NAME}/bin/dr-elephant
+chmod u+x ${DIST_NAME}/bin/dr-elephant
 
 # Append hadoop classpath and the ELEPHANT_CONF_DIR to the Classpath
 sed -i.bak $'/declare -r app_classpath/s/.$/:`hadoop classpath`:${ELEPHANT_CONF_DIR}"/' ${DIST_NAME}/bin/dr-elephant
