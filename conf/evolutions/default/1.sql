@@ -20,7 +20,7 @@ CREATE TABLE yarn_app_result (
   id              VARCHAR(50)   NOT NULL,
   name            TEXT          ,
   username        VARCHAR(50)   NOT NULL,
-  queue_name      TEXT          ,
+  queue_name      VARCHAR(50)   DEFAULT NULL ,
   start_time      BIGINT        UNSIGNED NOT NULL,
   finish_time     BIGINT        UNSIGNED NOT NULL,
   tracking_url    TEXT          ,
