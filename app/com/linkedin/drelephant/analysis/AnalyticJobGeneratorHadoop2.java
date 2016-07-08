@@ -47,8 +47,8 @@ public class AnalyticJobGeneratorHadoop2 implements AnalyticJobGenerator {
   private static final String RM_NODE_STATE_URL = "http://%s/ws/v1/cluster/info";
   private static Configuration configuration;
 
-  // We provide one minute job fetch delay due to the job sending lag from AM/NM to JobHistoryServer HDFS
-  private static final long FETCH_DELAY = 60000;
+  // We provide 5 sec job fetch delay due to the job sending lag from AM/NM to JobHistoryServer HDFS
+  private static final long FETCH_DELAY = 5000;
 
   // Generate a token update interval with a random deviation so that it does not update the token exactly at the same
   // time with other token updaters (e.g. ElephantFetchers).

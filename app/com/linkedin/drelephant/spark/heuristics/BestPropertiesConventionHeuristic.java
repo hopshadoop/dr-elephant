@@ -103,10 +103,10 @@ public class BestPropertiesConventionHeuristic implements Heuristic<SparkApplica
         _heuristicConfData.getHeuristicName(), Severity.max(kryoSeverity, driverMemSeverity, sortSeverity,
         executorCoreSeverity), 0);
 
-    result.addResultDetail(SPARK_SERIALIZER, propertyToString(sparkSerializer));
-    result.addResultDetail(SPARK_DRIVER_MEMORY, propertyToString(sparkDriverMemory));
-    result.addResultDetail(SPARK_SHUFFLE_MANAGER, propertyToString(sparkShuffleManager));
-    result.addResultDetail(SPARK_EXECUTOR_CORES, propertyToString(sparkExecutorCores));
+    result.addResultDetail("Serializer", propertyToString(sparkSerializer));
+    result.addResultDetail("Drive Memory", propertyToString(sparkDriverMemory));
+    result.addResultDetail("Suffle Manager", propertyToString(sparkShuffleManager));
+    result.addResultDetail("Executor Cores", propertyToString(sparkExecutorCores));
     logger.info("The size od the Heuristic details is: " + result.getHeuristicResultDetails().size());
 
     return result;
