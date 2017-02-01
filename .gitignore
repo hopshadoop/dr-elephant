@@ -48,5 +48,13 @@ target
 logs
 RUNNING_PID
 
+# macOS
+.DS_Store
 
 *.jar
+
+#web
+public/assets/ember/
+public/assets/fonts/
+web/bower_components/
+web/node_modules/

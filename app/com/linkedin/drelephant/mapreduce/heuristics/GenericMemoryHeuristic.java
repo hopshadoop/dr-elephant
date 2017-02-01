@@ -39,11 +39,12 @@ import org.apache.log4j.Logger;
  */
 public abstract class GenericMemoryHeuristic implements Heuristic<MapReduceApplicationData> {
   private static final Logger logger = Logger.getLogger(GenericMemoryHeuristic.class);
-  private static final long CONTAINER_MEMORY_DEFAULT_BYTES = 2048L * FileUtils.ONE_MB;
+  private static final long CONTAINER_MEMORY_DEFAULT_MBYTES = 2048L;
 
   // Severity Parameters
   private static final String MEM_RATIO_SEVERITY = "memory_ratio_severity";
   private static final String CONTAINER_MEM_SEVERITY = "container_memory_severity";
+  private static final String CONTAINER_MEM_DEFAULT_MB = "container_memory_default_mb";
 
   // Default value of parameters
   private double[] memRatioLimits = {0.6d, 0.5d, 0.4d, 0.3d}; // Avg Physical Mem of Tasks / Container Mem
@@ -51,6 +52,20 @@ public abstract class GenericMemoryHeuristic implements Heuristic<MapReduceAppli
 
   private String _containerMemConf;
   private HeuristicConfigurationData _heuristicConfData;
+
+  private long getContainerMemDefaultMBytes() {
+    Map<String, String> paramMap = _heuristicConfData.getParamMap();
+    if (paramMap.containsKey(CONTAINER_MEM_DEFAULT_MB)) {
+      String strValue = paramMap.get(CONTAINER_MEM_DEFAULT_MB);
+      try {
+        return Long.valueOf(strValue);
+      }
+      catch (NumberFormatException e) {
+        logger.warn(CONTAINER_MEM_DEFAULT_MB + ": expected number [" + strValue + "]");
+      }
+    }
+    return CONTAINER_MEMORY_DEFAULT_MBYTES;
+  }
 
   private void loadParameters() {
     Map<String, String> paramMap = _heuristicConfData.getParamMap();
@@ -63,6 +78,10 @@ public abstract class GenericMemoryHeuristic implements Heuristic<MapReduceAppli
     logger.info(heuristicName + " will use " + MEM_RATIO_SEVERITY + " with the following threshold settings: "
         + Arrays.toString(memRatioLimits));
 
+    long containerMemDefaultBytes = getContainerMemDefaultMBytes() * FileUtils.ONE_MB;
+    logger.info(heuristicName + " will use " + CONTAINER_MEM_DEFAULT_MB + " with the following threshold setting: "
+            + containerMemDefaultBytes);
+
     double[] confMemoryLimits = Utils.getParam(paramMap.get(CONTAINER_MEM_SEVERITY), memoryLimits.length);
     if (confMemoryLimits != null) {
       memoryLimits = confMemoryLimits;
@@ -70,7 +89,7 @@ public abstract class GenericMemoryHeuristic implements Heuristic<MapReduceAppli
     logger.info(heuristicName + " will use " + CONTAINER_MEM_SEVERITY + " with the following threshold settings: "
         + Arrays.toString(memoryLimits));
     for (int i = 0; i < memoryLimits.length; i++) {
-      memoryLimits[i] = memoryLimits[i] * CONTAINER_MEMORY_DEFAULT_BYTES;
+      memoryLimits[i] = memoryLimits[i] * containerMemDefaultBytes;
     }
   }
 
@@ -96,22 +115,30 @@ public abstract class GenericMemoryHeuristic implements Heuristic<MapReduceAppli
     }
 
     String containerSizeStr = data.getConf().getProperty(_containerMemConf);
-    if (containerSizeStr == null) {
-      return null;
-    }
+    long containerMem = -1L;
 
-    long containerMem;
-    try {
-      containerMem = Long.parseLong(containerSizeStr);
-    } catch (NumberFormatException e) {
-      // Some job has a string var like "${VAR}" for this config.
-      if(containerSizeStr.startsWith("$")) {
-        String realContainerConf = containerSizeStr.substring(containerSizeStr.indexOf("{")+1,
-            containerSizeStr.indexOf("}"));
-        containerMem = Long.parseLong(data.getConf().getProperty(realContainerConf));
-      } else {
-        throw e;
+    if (containerSizeStr != null) {
+      try {
+        containerMem = Long.parseLong(containerSizeStr);
+      } catch (NumberFormatException e0) {
+        // Some job has a string var like "${VAR}" for this config.
+        if(containerSizeStr.startsWith("$")) {
+          String realContainerConf = containerSizeStr.substring(containerSizeStr.indexOf("{")+1,
+              containerSizeStr.indexOf("}"));
+          String realContainerSizeStr = data.getConf().getProperty(realContainerConf);
+          try {
+            containerMem = Long.parseLong(realContainerSizeStr);
+          }
+          catch (NumberFormatException e1) {
+            logger.warn(realContainerConf + ": expected number [" + realContainerSizeStr + "]");
+          }
+        } else {
+          logger.warn(_containerMemConf + ": expected number [" + containerSizeStr + "]");
+        }
       }
+    }
+    if (containerMem < 0) {
+      containerMem = getContainerMemDefaultMBytes();
     }
     containerMem *= FileUtils.ONE_MB;
 

@@ -17,14 +17,19 @@
 package com.linkedin.drelephant.util;
 
 import com.linkedin.drelephant.analysis.HadoopApplicationData;
-import com.linkedin.drelephant.schedulers.AzkabanScheduler;
+import com.linkedin.drelephant.configurations.scheduler.SchedulerConfiguration;
+import com.linkedin.drelephant.configurations.scheduler.SchedulerConfigurationData;
+import com.linkedin.drelephant.exceptions.WorkflowClient;
 import com.linkedin.drelephant.schedulers.Scheduler;
-import com.linkedin.drelephant.spark.data.SparkApplicationData;
-import java.util.Map;
+
+import java.lang.reflect.InvocationTargetException;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 
 import java.util.Set;
 import org.apache.log4j.Logger;
+import org.w3c.dom.Document;
 
 import models.AppResult;
 
@@ -39,32 +44,18 @@ public class InfoExtractor {
   private static final Logger logger = Logger.getLogger(InfoExtractor.class);
   private static final String SPARK_EXTRA_JAVA_OPTIONS = "spark.driver.extraJavaOptions";
 
+  private static final String SCHEDULER_CONF = "SchedulerConf.xml";
+
+  private static final List<SchedulerConfigurationData> _configuredSchedulers;
+
   /**
-   * All the supported Schedulers.
-   * JobScheduler(x, y) where,
-   * x, is the unique property in the job conf that identifies the scheduler. This property must exist
-   *    in every job scheduled by the scheduler.
-   * y, is an instance of the Scheduler.
+   * Load all the schedulers configured in SchedulerConf.xml
    */
-  static enum JobScheduler {
-    AZKABAN(AzkabanScheduler.AZKABAN_JOB_URL);
-
-    String identifier;
-
-    JobScheduler(String identifier) {
-      this.identifier = identifier;
-    }
-
-    String getIdentifier() {
-      return this.identifier;
-    }
-
-    Scheduler getSchedulerInstance(String appId, Properties properties) {
-      if (this.equals(JobScheduler.AZKABAN)) {
-        return new AzkabanScheduler(appId, properties);
-      } else {
-        return null;
-      }
+  static {
+    Document document = Utils.loadXMLDoc(SCHEDULER_CONF);
+    _configuredSchedulers = new SchedulerConfiguration(document.getDocumentElement()).getSchedulerConfigurationData();
+    for (SchedulerConfigurationData data : _configuredSchedulers) {
+      logger.info(String.format("Load Scheduler %s with class : %s", data.getSchedulerName(), data.getClassName()));
     }
   }
 
@@ -77,9 +68,31 @@ public class InfoExtractor {
    */
   public static Scheduler getSchedulerInstance(String appId, Properties properties) {
     if (properties != null) {
-      for (JobScheduler scheduler : JobScheduler.values()) {
-        if (properties.containsKey(scheduler.getIdentifier())) {
-          return scheduler.getSchedulerInstance(appId, properties);
+      for (SchedulerConfigurationData data : _configuredSchedulers) {
+        try {
+          Class<?> schedulerClass = Class.forName(data.getClassName());
+          Object instance =
+              schedulerClass.getConstructor(String.class, Properties.class, SchedulerConfigurationData.class)
+                  .newInstance(appId, properties, data);
+          if (!(instance instanceof Scheduler)) {
+            throw new IllegalArgumentException("Class " + schedulerClass.getName() + " is not an implementation of " + Scheduler.class.getName());
+          }
+          Scheduler scheduler = (Scheduler) instance;
+          if (!scheduler.isEmpty()) {
+            return scheduler;
+          }
+        } catch (ClassNotFoundException e) {
+          throw new RuntimeException("Could not find class " + data.getClassName(), e);
+        } catch (InstantiationException e) {
+          throw new RuntimeException("Could not instantiate class " + data.getClassName(), e);
+        } catch (IllegalAccessException e) {
+          throw new RuntimeException("Could not access constructor for class" + data.getClassName(), e);
+        } catch (RuntimeException e) {
+          throw new RuntimeException(data.getClassName() + " is not a valid Scheduler class.", e);
+        } catch (InvocationTargetException e) {
+          throw new RuntimeException("Could not invoke class " + data.getClassName(), e);
+        } catch (NoSuchMethodException e) {
+          throw new RuntimeException("Could not find constructor for class " + data.getClassName(), e);
         }
       }
     }
@@ -96,8 +109,6 @@ public class InfoExtractor {
     Properties properties = new Properties();
     if (data instanceof MapReduceApplicationData) {
       properties = retrieveMapreduceProperties((MapReduceApplicationData) data);
-    } else if (data instanceof SparkApplicationData) {
-      properties = retrieveSparkProperties((SparkApplicationData) data);
     }
 
     Scheduler scheduler = getSchedulerInstance(data.getAppId(), properties);
@@ -112,24 +123,24 @@ public class InfoExtractor {
       result.flowExecId = Utils.truncateField(scheduler.getFlowExecId(), AppResult.FLOW_EXEC_ID_LIMIT, appId);
 
       // Dr. Elephant expects all the 4 ids(jobDefId, jobExecId, flowDefId, flowExecId) to be set.
-      if (!Utils.isSet(result.jobDefId) || !Utils.isSet(result.jobExecId)
-          || !Utils.isSet(result.flowDefId) || !Utils.isSet(result.flowExecId)) {
+      if (!Utils.isSet(result.jobDefId) || !Utils.isSet(result.jobExecId) || !Utils.isSet(result.flowDefId) || !Utils
+          .isSet(result.flowExecId)) {
         logger.warn("This job doesn't have the correct " + scheduler.getSchedulerName() + " integration support. I"
             + " will treat this as an adhoc job");
         loadNoSchedulerInfo(result);
       } else {
-        result.scheduler =  Utils.truncateField(scheduler.getSchedulerName(), AppResult.SCHEDULER_LIMIT, appId);
+        result.scheduler = Utils.truncateField(scheduler.getSchedulerName(), AppResult.SCHEDULER_LIMIT, appId);
         result.workflowDepth = scheduler.getWorkflowDepth();
-        result.jobName = scheduler.getJobName() != null ?
-            Utils.truncateField(scheduler.getJobName(), AppResult.JOB_NAME_LIMIT, appId) : "";
-        result.jobDefUrl = scheduler.getJobDefUrl() != null ?
-            Utils.truncateField(scheduler.getJobDefUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
-        result.jobExecUrl = scheduler.getJobExecUrl() != null ?
-            Utils.truncateField(scheduler.getJobExecUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
-        result.flowDefUrl = scheduler.getFlowDefUrl() != null ?
-            Utils.truncateField(scheduler.getFlowDefUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
-        result.flowExecUrl = scheduler.getFlowExecUrl() != null ?
-            Utils.truncateField(scheduler.getFlowExecUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
+        result.jobName = scheduler.getJobName() != null ? Utils
+            .truncateField(scheduler.getJobName(), AppResult.JOB_NAME_LIMIT, appId) : "";
+        result.jobDefUrl = scheduler.getJobDefUrl() != null ? Utils
+            .truncateField(scheduler.getJobDefUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
+        result.jobExecUrl = scheduler.getJobExecUrl() != null ? Utils
+            .truncateField(scheduler.getJobExecUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
+        result.flowDefUrl = scheduler.getFlowDefUrl() != null ? Utils
+            .truncateField(scheduler.getFlowDefUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
+        result.flowExecUrl = scheduler.getFlowExecUrl() != null ? Utils
+            .truncateField(scheduler.getFlowExecUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
       }
     } else {
       loadNoSchedulerInfo(result);
@@ -144,33 +155,6 @@ public class InfoExtractor {
    */
   public static Properties retrieveMapreduceProperties(MapReduceApplicationData appData) {
     return appData.getConf();
-  }
-
-  /**
-   * Retrieve the spark properties from SPARK_EXTRA_JAVA_OPTIONS
-   *
-   * @param appData the Spark Application Data
-   * @return The retrieved Spark properties
-   */
-  public static Properties retrieveSparkProperties(SparkApplicationData appData) {
-    String prop = appData.getEnvironmentData().getSparkProperty(SPARK_EXTRA_JAVA_OPTIONS);
-    Properties properties = new Properties();
-    if (prop != null) {
-      try {
-        Map<String, String> javaOptions = Utils.parseJavaOptions(prop);
-        for (String key : javaOptions.keySet()) {
-          properties.setProperty(key, unescapeString(javaOptions.get(key)));
-        }
-        logger.info("Parsed options:" + properties.toString());
-      } catch (IllegalArgumentException e) {
-        logger.error("Encountered error while parsing java options into urls: " + e.getMessage());
-      }
-    } else {
-      logger.error("Unable to retrieve the scheduler info for application [" +
-          appData.getGeneralData().getApplicationId() + "]. It does not contain [" + SPARK_EXTRA_JAVA_OPTIONS
-          + "] property in its spark properties.");
-    }
-    return properties;
   }
 
   /**
@@ -204,5 +188,70 @@ public class InfoExtractor {
     result.flowExecUrl = "";
     result.flowDefUrl = "";
     result.jobName = "";
+  }
+
+  /**
+   * Returns the set of all the schedulers that have been configured for exception analysis
+   * @return The set of all the schedulers that have been confgured for exception analysis
+   */
+  public static Set<String> getSchedulersConfiguredForException() {
+    Set<String> schedulersForExceptions = new HashSet<String>();
+    for (SchedulerConfigurationData data : _configuredSchedulers) {
+      if (data.getParamMap().containsKey("exception_enabled") && data.getParamMap().get("exception_enabled")
+          .equals("true")) {
+        schedulersForExceptions.add(data.getSchedulerName());
+      }
+    }
+    return schedulersForExceptions;
+  }
+
+  /**
+   * Returns the workflow client instance based on the scheduler name and the workflow url
+   * @param scheduler The name of the scheduler
+   * @param url The url of the workflow
+   * @return The Workflow cient based on the workflow url
+   */
+  public static WorkflowClient getWorkflowClientInstance(String scheduler, String url) {
+    if (!getSchedulersConfiguredForException().contains(scheduler)) {
+      throw new RuntimeException(String.format("Scheduler %s is not configured for Exception fingerprinting ", scheduler));
+    }
+
+    for (SchedulerConfigurationData data : _configuredSchedulers) {
+      if (data.getSchedulerName().equals(scheduler)) {
+        try {
+          String workflowClass = data.getParamMap().get("exception_class");
+          Class<?> schedulerClass = Class.forName(workflowClass);
+          Object instance = schedulerClass.getConstructor(String.class).newInstance(url);
+          if (!(instance instanceof WorkflowClient)) {
+            throw new IllegalArgumentException(
+                "Class " + schedulerClass.getName() + " is not an implementation of " + WorkflowClient.class.getName());
+          }
+          WorkflowClient workflowClient = (WorkflowClient) instance;
+          return workflowClient;
+        } catch (ClassNotFoundException e) {
+          throw new RuntimeException("Could not find class " + data.getClassName(), e);
+        } catch (InstantiationException e) {
+          throw new RuntimeException("Could not instantiate class " + data.getClassName(), e);
+        } catch (IllegalAccessException e) {
+          throw new RuntimeException("Could not access constructor for class" + data.getClassName(), e);
+        } catch (RuntimeException e) {
+          throw new RuntimeException(data.getClassName() + " is not a valid Scheduler class.", e);
+        } catch (InvocationTargetException e) {
+          throw new RuntimeException("Could not invoke class " + data.getClassName(), e);
+        } catch (NoSuchMethodException e) {
+          throw new RuntimeException("Could not find constructor for class " + data.getClassName(), e);
+        }
+      }
+    }
+    return null;
+  }
+
+  public static SchedulerConfigurationData getSchedulerData(String scheduler) {
+    for (SchedulerConfigurationData data : _configuredSchedulers) {
+      if (data.getSchedulerName().equals(scheduler)) {
+        return data;
+      }
+    }
+    return null;
   }
 }

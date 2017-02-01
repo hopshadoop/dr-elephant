@@ -76,6 +76,9 @@ public class AppResult extends Model {
     public static final String JOB_DEF_URL = "jobDefUrl";
     public static final String FLOW_DEF_URL = "flowDefUrl";
     public static final String APP_HEURISTIC_RESULTS = "yarnAppHeuristicResults";
+    public static final String RESOURCE_USAGE = "resourceUsed";
+    public static final String WASTED_RESOURCES = "resourceWasted";
+    public static final String TOTAL_DELAY = "totalDelay";
   }
 
   public static String getSearchFields() {
@@ -146,6 +149,15 @@ public class AppResult extends Model {
 
   @Column(length = URL_LEN_LIMIT, nullable = false)
   public String flowDefUrl;
+
+  @Column(nullable = true)
+  public long resourceUsed;
+
+  @Column(nullable = true)
+  public long resourceWasted;
+
+  @Column(nullable = true)
+  public long totalDelay;
 
   @JsonManagedReference
   @OneToMany(cascade = CascadeType.ALL, mappedBy = "yarnAppResult")

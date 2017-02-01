@@ -16,6 +16,7 @@
 
 # --- !Ups
 
+
 CREATE TABLE yarn_app_result (
   id              VARCHAR(50)   NOT NULL,
   name            TEXT          ,
@@ -48,6 +49,7 @@ create index yarn_app_result_i4 on yarn_app_result (flow_exec_id);
 create index yarn_app_result_i5 on yarn_app_result (job_def_id);
 create index yarn_app_result_i6 on yarn_app_result (flow_def_id);
 create index yarn_app_result_i7 on yarn_app_result (start_time);
+
 
 CREATE TABLE yarn_app_heuristic_result (
   id                  INT(11)       NOT NULL AUTO_INCREMENT,
@@ -88,3 +90,4 @@ SET FOREIGN_KEY_CHECKS=1;
 
 # --- Created by Ebean DDL
 # To stop Ebean DDL generation, remove this comment and start using Evolutions
+

@@ -115,7 +115,7 @@ public class FetcherConfigurationTest {
   public void testParseFetcherConf4() {
     expectedEx.expect(RuntimeException.class);
     expectedEx.expectMessage("No tag or invalid tag 'applicationtype' in fetcher 1"
-            + " classname com.linkedin.drelephant.mapreduce.MapReduceFetcherHadoop2");
+            + " classname com.linkedin.drelephant.mapreduce.fetchers.MapReduceFetcherHadoop2");
     FetcherConfiguration fetcherConf = new FetcherConfiguration(document4.getDocumentElement());
   }
 
@@ -127,10 +127,6 @@ public class FetcherConfigurationTest {
     FetcherConfiguration fetcherConf = new FetcherConfiguration(document5.getDocumentElement());
     assertEquals(fetcherConf.getFetchersConfigurationData().size(), 1);
     assertEquals(fetcherConf.getFetchersConfigurationData().get(0).getAppType().getName(), spark);
-    assertEquals(fetcherConf.getFetchersConfigurationData().get(0).getParamMap().size(), 3);
-    assertEquals(fetcherConf.getFetchersConfigurationData().get(0).getParamMap().get(logSizeField), logSizeValue);
-    assertEquals(fetcherConf.getFetchersConfigurationData().get(0).getParamMap().get(logDirField), logDirValue);
   }
 
 }
-
