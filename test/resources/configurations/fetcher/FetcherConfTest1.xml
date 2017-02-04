@@ -22,6 +22,6 @@
   </fetcher>
   <fetcher>
     <applicationtype>spark</applicationtype>
-    <classname>org.apache.spark.deploy.history.SparkFSFetcher</classname>
+    <classname>com.linkedin.drelephant.spark.fetchers.SparkFetcher</classname>
   </fetcher>
 </fetchers>
