@@ -42,14 +42,17 @@ public class TestTaskLevelAggregatedMetrics {
 
     @Test
     public void testTaskLevelData() {
-        MapReduceTaskData taskData[] = new MapReduceTaskData[2];
+        MapReduceTaskData taskData[] = new MapReduceTaskData[3];
         MapReduceCounterData counterData = new MapReduceCounterData();
         counterData.set(MapReduceCounterData.CounterName.PHYSICAL_MEMORY_BYTES, 655577088L);
         counterData.set(MapReduceCounterData.CounterName.VIRTUAL_MEMORY_BYTES, 3051589632L);
         long time[] = {0,0,0,1464218501117L, 1464218534148L};
-        taskData[0] = new MapReduceTaskData(counterData);
-        taskData[0].setTime(time);
-        taskData[1] = new MapReduceTaskData(counterData);
+        taskData[0] = new MapReduceTaskData("task", "id");
+        taskData[0].setTimeAndCounter(time, counterData);
+        taskData[1] = new MapReduceTaskData("task", "id");
+        taskData[1].setTimeAndCounter(new long[5], counterData);
+        // Non-sampled task, which does not contain time and counter data
+        taskData[2] = new MapReduceTaskData("task", "id");
         TaskLevelAggregatedMetrics taskMetrics = new TaskLevelAggregatedMetrics(taskData, 4096L, 1463218501117L);
         Assert.assertEquals(taskMetrics.getDelay(), 1000000000L);
         Assert.assertEquals(taskMetrics.getResourceUsed(), 135168L);

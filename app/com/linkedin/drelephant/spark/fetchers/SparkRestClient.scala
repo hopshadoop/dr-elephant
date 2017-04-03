@@ -24,7 +24,7 @@ import scala.async.Async
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import com.linkedin.drelephant.spark.data.SparkRestDerivedData
@@ -51,7 +51,14 @@ class SparkRestClient(sparkConf: SparkConf) {
 
   private val historyServerUri: URI = sparkConf.getOption(HISTORY_SERVER_ADDRESS_KEY) match {
     case Some(historyServerAddress) =>
-      val baseUri = new URI(s"http://${historyServerAddress}")
+      val baseUri: URI =
+        // Latest versions of CDH include http in their history server address configuration.
+        // However, it is not recommended by Spark documentation(http://spark.apache.org/docs/latest/running-on-yarn.html)
+        if (historyServerAddress.contains(s"http://")) {
+          new URI(historyServerAddress)
+        } else {
+          new URI(s"http://${historyServerAddress}")
+        }
       require(baseUri.getPath == "")
       baseUri
     case None =>
@@ -68,22 +75,17 @@ class SparkRestClient(sparkConf: SparkConf) {
 
     // Limit scope of async.
     async {
-      val lastAttemptId = applicationInfo.attempts.maxBy { _.startTime }.attemptId
-      lastAttemptId match {
-        case Some(attemptId) => {
-          val attemptTarget = appTarget.path(attemptId)
-          val futureJobDatas = async { getJobDatas(attemptTarget) }
-          val futureStageDatas = async { getStageDatas(attemptTarget) }
-          val futureExecutorSummaries = async { getExecutorSummaries(attemptTarget) }
-          SparkRestDerivedData(
-            applicationInfo,
-            await(futureJobDatas),
-            await(futureStageDatas),
-            await(futureExecutorSummaries)
-          )
-        }
-        case None => throw new IllegalArgumentException("Spark REST API has no attempt information")
-      }
+      val lastAttemptId = applicationInfo.attempts.maxBy {_.startTime}.attemptId
+      val attemptTarget = lastAttemptId.map(appTarget.path).getOrElse(appTarget)
+      val futureJobDatas = async { getJobDatas(attemptTarget) }
+      val futureStageDatas = async { getStageDatas(attemptTarget) }
+      val futureExecutorSummaries = async { getExecutorSummaries(attemptTarget) }
+      SparkRestDerivedData(
+        applicationInfo,
+        await(futureJobDatas),
+        await(futureStageDatas),
+        await(futureExecutorSummaries)
+      )
     }
   }
 
@@ -92,7 +94,7 @@ class SparkRestClient(sparkConf: SparkConf) {
       get(appTarget, SparkRestObjectMapper.readValue[ApplicationInfo])
     } catch {
       case NonFatal(e) => {
-        logger.error(s"error reading ${appTarget.getUri}", e)
+        logger.error(s"error reading applicationInfo ${appTarget.getUri}", e)
         throw e
       }
     }
@@ -104,7 +106,7 @@ class SparkRestClient(sparkConf: SparkConf) {
       get(target, SparkRestObjectMapper.readValue[Seq[JobData]])
     } catch {
       case NonFatal(e) => {
-        logger.error(s"error reading ${target.getUri}", e)
+        logger.error(s"error reading jobData ${target.getUri}", e)
         throw e
       }
     }
@@ -116,7 +118,7 @@ class SparkRestClient(sparkConf: SparkConf) {
       get(target, SparkRestObjectMapper.readValue[Seq[StageData]])
     } catch {
       case NonFatal(e) => {
-        logger.error(s"error reading ${target.getUri}", e)
+        logger.error(s"error reading stageData ${target.getUri}", e)
         throw e
       }
     }
@@ -128,7 +130,7 @@ class SparkRestClient(sparkConf: SparkConf) {
       get(target, SparkRestObjectMapper.readValue[Seq[ExecutorSummary]])
     } catch {
       case NonFatal(e) => {
-        logger.error(s"error reading ${target.getUri}", e)
+        logger.error(s"error reading executorSummary ${target.getUri}", e)
         throw e
       }
     }
@@ -150,6 +152,7 @@ object SparkRestClient {
     val objectMapper = new ObjectMapper() with ScalaObjectMapper
     objectMapper.setDateFormat(dateFormat)
     objectMapper.registerModule(DefaultScalaModule)
+    objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     objectMapper
   }
 

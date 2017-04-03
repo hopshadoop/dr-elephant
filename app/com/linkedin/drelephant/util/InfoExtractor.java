@@ -20,20 +20,24 @@ import com.linkedin.drelephant.analysis.HadoopApplicationData;
 import com.linkedin.drelephant.configurations.scheduler.SchedulerConfiguration;
 import com.linkedin.drelephant.configurations.scheduler.SchedulerConfigurationData;
 import com.linkedin.drelephant.exceptions.WorkflowClient;
+import com.linkedin.drelephant.mapreduce.data.MapReduceApplicationData;
 import com.linkedin.drelephant.schedulers.Scheduler;
+import com.linkedin.drelephant.spark.data.SparkApplicationData;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
-
 import java.util.Set;
+import java.util.Map;
+
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.w3c.dom.Document;
 
 import models.AppResult;
-
-import com.linkedin.drelephant.mapreduce.data.MapReduceApplicationData;
+import scala.Option;
+import scala.Some;
 
 
 /**
@@ -107,54 +111,92 @@ public class InfoExtractor {
    */
   public static void loadInfo(AppResult result, HadoopApplicationData data) {
     Properties properties = new Properties();
-    if (data instanceof MapReduceApplicationData) {
+    if( data instanceof MapReduceApplicationData) {
       properties = retrieveMapreduceProperties((MapReduceApplicationData) data);
+    } else if ( data instanceof SparkApplicationData) {
+      properties = retrieveSparkProperties((SparkApplicationData) data);
     }
-
     Scheduler scheduler = getSchedulerInstance(data.getAppId(), properties);
 
-    if (scheduler != null) {
-      String appId = data.getAppId();
-
-      // Load all the Ids
-      result.jobDefId = Utils.truncateField(scheduler.getJobDefId(), AppResult.URL_LEN_LIMIT, appId);
-      result.jobExecId = Utils.truncateField(scheduler.getJobExecId(), AppResult.URL_LEN_LIMIT, appId);
-      result.flowDefId = Utils.truncateField(scheduler.getFlowDefId(), AppResult.URL_LEN_LIMIT, appId);
-      result.flowExecId = Utils.truncateField(scheduler.getFlowExecId(), AppResult.FLOW_EXEC_ID_LIMIT, appId);
-
-      // Dr. Elephant expects all the 4 ids(jobDefId, jobExecId, flowDefId, flowExecId) to be set.
-      if (!Utils.isSet(result.jobDefId) || !Utils.isSet(result.jobExecId) || !Utils.isSet(result.flowDefId) || !Utils
-          .isSet(result.flowExecId)) {
-        logger.warn("This job doesn't have the correct " + scheduler.getSchedulerName() + " integration support. I"
-            + " will treat this as an adhoc job");
-        loadNoSchedulerInfo(result);
-      } else {
-        result.scheduler = Utils.truncateField(scheduler.getSchedulerName(), AppResult.SCHEDULER_LIMIT, appId);
-        result.workflowDepth = scheduler.getWorkflowDepth();
-        result.jobName = scheduler.getJobName() != null ? Utils
-            .truncateField(scheduler.getJobName(), AppResult.JOB_NAME_LIMIT, appId) : "";
-        result.jobDefUrl = scheduler.getJobDefUrl() != null ? Utils
-            .truncateField(scheduler.getJobDefUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
-        result.jobExecUrl = scheduler.getJobExecUrl() != null ? Utils
-            .truncateField(scheduler.getJobExecUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
-        result.flowDefUrl = scheduler.getFlowDefUrl() != null ? Utils
-            .truncateField(scheduler.getFlowDefUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
-        result.flowExecUrl = scheduler.getFlowExecUrl() != null ? Utils
-            .truncateField(scheduler.getFlowExecUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
-      }
-    } else {
+    if (scheduler == null) {
+      logger.info("No Scheduler found for appid: " + data.getAppId());
       loadNoSchedulerInfo(result);
+    } else if (StringUtils.isEmpty(scheduler.getJobDefId()) || StringUtils.isEmpty(scheduler.getJobExecId())
+               || StringUtils.isEmpty(scheduler.getFlowDefId()) || StringUtils.isEmpty(scheduler.getFlowExecId())) {
+      logger.warn("This job doesn't have the correct " + scheduler.getSchedulerName() + " integration support. I"
+                  + " will treat this as an adhoc job");
+      logger.info("No Flow/job info found for appid: " + data.getAppId());
+      loadNoSchedulerInfo(result);
+    } else {
+      loadSchedulerInfo(result, data, scheduler);
     }
   }
 
   /**
-   * Retrieve the Mapreduce properties
-   *
-   * @param appData the Mapreduce Application Data
-   * @return the retrieved mapreduce properties
+    * Retrieve the spark properties from SPARK_EXTRA_JAVA_OPTIONS
+    *
+    * @param appData the Spark Application Data
+    * @return The retrieved Spark properties
+    */
+  public static Properties retrieveSparkProperties(SparkApplicationData appData) {
+    Option<String> prop = appData.appConfigurationProperties().get(SPARK_EXTRA_JAVA_OPTIONS);
+    Properties properties = new Properties();
+    if (prop.isDefined()) {
+      try {
+        Map<String, String> javaOptions = Utils.parseJavaOptions(prop.get());
+        for (String key : javaOptions.keySet()) {
+          properties.setProperty(key, unescapeString(javaOptions.get(key)));
+        }
+      } catch (IllegalArgumentException e) {
+        logger.error("Encountered error while parsing java options into urls: " + e.getMessage());
+      }
+    } else {
+      logger.error("Unable to retrieve the scheduler info for application [" +
+          appData.appId() + "]. It does not contain [" + SPARK_EXTRA_JAVA_OPTIONS + "] property in its spark properties.");
+    }
+    return properties;
+  }
+
+  /**
+   * Retrieve the mapreduce application properties
+   * @param appData the mapReduce Application Data
+   * @return the retrieve mapreduce properties
    */
   public static Properties retrieveMapreduceProperties(MapReduceApplicationData appData) {
     return appData.getConf();
+  }
+
+  /**
+   * Populates the given app result with the info from the given application data and scheduler.
+   *
+   * @param result the AppResult to populate
+   * @param data the HadoopApplicationData to use when populating the result
+   * @param scheduler the Scheduler to use when populating the result
+   */
+  public static void loadSchedulerInfo(AppResult result, HadoopApplicationData data, Scheduler scheduler) {
+    String appId = data.getAppId();
+
+    result.scheduler = Utils.truncateField(scheduler.getSchedulerName(), AppResult.SCHEDULER_LIMIT, appId);
+    result.workflowDepth = scheduler.getWorkflowDepth();
+
+    result.jobName = scheduler.getJobName() != null ? Utils
+      .truncateField(scheduler.getJobName(), AppResult.JOB_NAME_LIMIT, appId) : "";
+
+    result.jobDefId = Utils.truncateField(scheduler.getJobDefId(), AppResult.URL_LEN_LIMIT, appId);
+    result.jobDefUrl = scheduler.getJobDefUrl() != null ? Utils
+      .truncateField(scheduler.getJobDefUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
+
+    result.jobExecId = Utils.truncateField(scheduler.getJobExecId(), AppResult.URL_LEN_LIMIT, appId);
+    result.jobExecUrl = scheduler.getJobExecUrl() != null ? Utils
+      .truncateField(scheduler.getJobExecUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
+
+    result.flowDefId = Utils.truncateField(scheduler.getFlowDefId(), AppResult.URL_LEN_LIMIT, appId);
+    result.flowDefUrl = scheduler.getFlowDefUrl() != null ? Utils
+      .truncateField(scheduler.getFlowDefUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
+
+    result.flowExecId = Utils.truncateField(scheduler.getFlowExecId(), AppResult.FLOW_EXEC_ID_LIMIT, appId);
+    result.flowExecUrl = scheduler.getFlowExecUrl() != null ? Utils
+      .truncateField(scheduler.getFlowExecUrl(), AppResult.URL_LEN_LIMIT, appId) : "";
   }
 
   /**

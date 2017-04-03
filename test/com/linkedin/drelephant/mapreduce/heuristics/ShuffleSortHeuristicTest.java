@@ -92,13 +92,16 @@ public class ShuffleSortHeuristicTest extends TestCase {
 
   private Severity analyzeJob(long shuffleTimeMs, long sortTimeMs, long reduceTimeMs) throws IOException {
     MapReduceCounterData dummyCounter = new MapReduceCounterData();
-    MapReduceTaskData[] reducers = new MapReduceTaskData[NUMTASKS];
+    MapReduceTaskData[] reducers = new MapReduceTaskData[NUMTASKS + 1];
 
     int i = 0;
     for (; i < NUMTASKS; i++) {
-      reducers[i] = new MapReduceTaskData(dummyCounter,
-        new long[] { shuffleTimeMs + sortTimeMs + reduceTimeMs, shuffleTimeMs, sortTimeMs, 0, 0});
+      reducers[i] = new MapReduceTaskData("task-id-"+i, "task-attempt-id-"+i);
+      reducers[i].setTimeAndCounter(
+          new long[] { shuffleTimeMs + sortTimeMs + reduceTimeMs, shuffleTimeMs, sortTimeMs, 0, 0}, dummyCounter);
     }
+    // Non-sampled task, which does not contain time and counter data
+    reducers[i] = new MapReduceTaskData("task-id-"+i, "task-attempt-id-"+i);
     MapReduceApplicationData data = new MapReduceApplicationData().setCounters(dummyCounter).setReducerData(reducers);
     HeuristicResult result = _heuristic.apply(data);
     return result.getSeverity();

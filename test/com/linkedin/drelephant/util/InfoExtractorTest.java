@@ -16,13 +16,26 @@
 
 package com.linkedin.drelephant.util;
 
+import com.linkedin.drelephant.analysis.ApplicationType;
+import com.linkedin.drelephant.analysis.HadoopApplicationData;
+import com.linkedin.drelephant.configurations.scheduler.SchedulerConfigurationData;
+import com.linkedin.drelephant.mapreduce.data.MapReduceApplicationData;
 import com.linkedin.drelephant.schedulers.AirflowScheduler;
 import com.linkedin.drelephant.schedulers.AzkabanScheduler;
 import com.linkedin.drelephant.schedulers.OozieScheduler;
 import com.linkedin.drelephant.schedulers.Scheduler;
 
+import com.linkedin.drelephant.spark.data.SparkApplicationData;
+import com.linkedin.drelephant.spark.fetchers.statusapiv1.ApplicationAttemptInfo;
+import com.linkedin.drelephant.spark.fetchers.statusapiv1.ApplicationInfo;
+import com.linkedin.drelephant.spark.fetchers.statusapiv1.ExecutorSummary;
+import com.linkedin.drelephant.spark.fetchers.statusapiv1.JobData;
+import com.linkedin.drelephant.spark.fetchers.statusapiv1.StageData;
+import java.util.ArrayList;
 import java.util.Properties;
+import models.AppResult;
 
+import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -31,13 +44,22 @@ import org.junit.runner.RunWith;
 import mockit.Expectations;
 import mockit.Mocked;
 import mockit.integration.junit4.JMockit;
+import org.apache.commons.lang.StringUtils;
 import org.apache.oozie.client.OozieClient;
 import org.apache.oozie.client.WorkflowJob;
 
 import play.test.FakeApplication;
 import play.test.Helpers;
 
+import scala.Tuple2;
+import scala.collection.immutable.Map;
+import scala.collection.immutable.HashMap;
+import scala.collection.immutable.Vector;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 
 @RunWith(JMockit.class)
@@ -147,4 +169,141 @@ public class InfoExtractorTest {
     assertEquals(null, scheduler);
   }
 
+  @Test
+  public void testLoadSchedulerInfo() {
+    Properties properties = new Properties();
+    properties.put(AzkabanScheduler.AZKABAN_JOB_URL,
+                   "https://grid.example.com:9000/manager?project=project-name&flow=flow-name&job=job-name");
+    properties.put(AzkabanScheduler.AZKABAN_ATTEMPT_URL,
+                   "https://grid.example.com:9000/executor?execid=123456&job=job-name&attempt=0");
+    properties.put(AzkabanScheduler.AZKABAN_WORKFLOW_URL,
+                   "https://grid.example.com:9000/manager?project=project-name&flow=flow-name");
+    properties.put(AzkabanScheduler.AZKABAN_EXECUTION_URL,
+                   "https://grid.example.com:9000/executor?execid=123456");
+    properties.put(AzkabanScheduler.AZKABAN_JOB_NAME, "job-name");
+
+    SchedulerConfigurationData schedulerConfigurationData = new SchedulerConfigurationData("azkaban", null, null);
+
+    Scheduler scheduler = new AzkabanScheduler("id", properties, schedulerConfigurationData);
+
+    AppResult result = new AppResult();
+
+    HadoopApplicationData data =
+      new HadoopApplicationData() {
+        String appId = "application_5678";
+        Properties conf = new Properties();
+        ApplicationType applicationType = new ApplicationType("foo");
+
+        @Override
+        public String getAppId() {
+          return appId;
+        }
+
+        @Override
+        public Properties getConf() {
+          return conf;
+        }
+
+        @Override
+        public ApplicationType getApplicationType() {
+          return applicationType;
+        }
+
+        @Override
+        public boolean isEmpty() {
+          return false;
+        }
+      };
+
+    InfoExtractor.loadSchedulerInfo(result, data, scheduler);
+
+    assertEquals(result.scheduler, "azkaban");
+    assertFalse(StringUtils.isEmpty(result.getJobExecId()));
+    assertFalse(StringUtils.isEmpty(result.getJobDefId()));
+    assertFalse(StringUtils.isEmpty(result.getFlowExecId()));
+    assertFalse(StringUtils.isEmpty(result.getFlowDefId()));
+    assertFalse(StringUtils.isEmpty(result.getJobExecUrl()));
+    assertFalse(StringUtils.isEmpty(result.getJobDefUrl()));
+    assertFalse(StringUtils.isEmpty(result.getFlowExecUrl()));
+    assertFalse(StringUtils.isEmpty(result.getFlowDefUrl()));
+  }
+
+  @Test
+  public void testLoadInfoMapReduce() {
+    final String JOB_DEF_URL = "https://grid.example.com:9000/manager?project=project-name&flow=flow-name&job=job-name";
+    final String JOB_EXEC_URL =  "https://grid.example.com:9000/executor?execid=123456&job=job-name&attempt=0";
+    final String FLOW_DEF_URL = "https://grid.example.com:9000/manager?project=project-name&flow=flow-name";
+    final String FLOW_EXEC_URL = "https://grid.example.com:9000/executor?execid=123456";
+    final String JOB_NAME = "job-name";
+    Properties properties = new Properties();
+    properties.put(AzkabanScheduler.AZKABAN_JOB_URL, JOB_DEF_URL);
+    properties.put(AzkabanScheduler.AZKABAN_ATTEMPT_URL, JOB_EXEC_URL );
+    properties.put(AzkabanScheduler.AZKABAN_WORKFLOW_URL, FLOW_DEF_URL);
+    properties.put(AzkabanScheduler.AZKABAN_EXECUTION_URL, FLOW_EXEC_URL);
+    properties.put(AzkabanScheduler.AZKABAN_JOB_NAME, JOB_NAME);
+
+    AppResult result = new AppResult();
+
+    HadoopApplicationData data =
+        (new MapReduceApplicationData()).setAppId("application_5678").setJobConf(properties);
+
+    InfoExtractor.loadInfo(result, data);
+
+    assertTrue(result.jobDefId.equals(JOB_DEF_URL));
+    assertTrue(result.jobExecId.equals(JOB_EXEC_URL));
+    assertTrue(result.flowDefId.equals(FLOW_DEF_URL));
+    assertTrue(result.flowExecId.equals(FLOW_EXEC_URL));
+  }
+
+  @Test
+  public void testLoadInfoSpark() {
+    final String JOB_DEF_URL = "https://grid.example.com:9000/manager?project=project-name&flow=flow-name&job=job-name";
+    final String JOB_EXEC_URL =  "https://grid.example.com:9000/executor?execid=123456&job=job-name&attempt=0";
+    final String FLOW_DEF_URL = "https://grid.example.com:9000/manager?project=project-name&flow=flow-name";
+    final String FLOW_EXEC_URL = "https://grid.example.com:9000/executor?execid=123456";
+    final String JAVA_EXTRA_OPTIONS = "spark.driver.extraJavaOptions";
+    Map<String,String> properties = new HashMap<String,String>();
+    properties = properties.$plus(new Tuple2<String, String>(JAVA_EXTRA_OPTIONS, "-Dazkaban.link.workflow.url=" + FLOW_DEF_URL +
+        " -Dazkaban.link.job.url=" + JOB_DEF_URL +
+        " -Dazkaban.link.execution.url=" + FLOW_EXEC_URL +
+        " -Dazkaban.link.attempt.url=" + JOB_EXEC_URL));
+
+    AppResult result = new AppResult();
+
+    HadoopApplicationData data = new SparkApplicationData("application_5678",
+            properties,
+            new ApplicationInfo("", "", new Vector<ApplicationAttemptInfo>(0,1,0)),
+            new Vector<JobData>(0,1,0),
+            new Vector<StageData>(0,1,0),
+            new Vector<ExecutorSummary>(0,1,0));
+
+    InfoExtractor.loadInfo(result, data);
+
+    assertTrue(result.jobDefId.equals(JOB_DEF_URL));
+    assertTrue(result.jobExecId.equals(JOB_EXEC_URL));
+    assertTrue(result.flowDefId.equals(FLOW_DEF_URL));
+    assertTrue(result.flowExecId.equals(FLOW_EXEC_URL));
+  }
+
+  @Test
+  public void testLoadInfoSparkNoConfig() {
+    Map<String,String> properties = new HashMap<String,String>();
+
+    AppResult result = new AppResult();
+
+    HadoopApplicationData data = new SparkApplicationData("application_5678",
+        properties,
+        new ApplicationInfo("", "", new Vector<ApplicationAttemptInfo>(0,1,0)),
+        new Vector<JobData>(0,1,0),
+        new Vector<StageData>(0,1,0),
+        new Vector<ExecutorSummary>(0,1,0));
+
+    // test to make sure loadInfo does not throw exception if properties are not defined
+    InfoExtractor.loadInfo(result, data);
+
+    assertTrue(result.jobDefId.isEmpty());
+    assertTrue(result.jobExecId.isEmpty());
+    assertTrue(result.flowDefId.isEmpty());
+    assertTrue(result.flowExecId.isEmpty());
+  }
 }

@@ -45,6 +45,9 @@
     files, but also increase the risk of OutOfMemory error. The default heap size of Dr. Elephant
     is 1024MB. To increase this, e.g. to 2048MB, run this before start.sh:
       export OPTS="-mem 2048"
+
+    To work properly, this fetcher should use the same timezone with the job history server.
+    If not set, the local timezone will be used.
   -->
   <!--
   <fetcher>
@@ -53,6 +56,7 @@
     <params>
       <sampling_enabled>false</sampling_enabled>
       <history_log_size_limit_in_mb>500</history_log_size_limit_in_mb>
+      <history_server_time_zone>PST</history_server_time_zone>
     </params>
   </fetcher>
   -->

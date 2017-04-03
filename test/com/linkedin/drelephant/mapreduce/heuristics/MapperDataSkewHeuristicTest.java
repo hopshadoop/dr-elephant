@@ -72,7 +72,7 @@ public class MapperDataSkewHeuristicTest extends TestCase {
   private Severity analyzeJob(int numSmallTasks, int numLargeTasks, long smallInputSize, long largeInputSize)
       throws IOException {
     MapReduceCounterData jobCounter = new MapReduceCounterData();
-    MapReduceTaskData[] mappers = new MapReduceTaskData[numSmallTasks + numLargeTasks];
+    MapReduceTaskData[] mappers = new MapReduceTaskData[numSmallTasks + numLargeTasks + 1];
 
     MapReduceCounterData smallCounter = new MapReduceCounterData();
     smallCounter.set(MapReduceCounterData.CounterName.HDFS_BYTES_READ, smallInputSize);
@@ -82,11 +82,15 @@ public class MapperDataSkewHeuristicTest extends TestCase {
 
     int i = 0;
     for (; i < numSmallTasks; i++) {
-      mappers[i] = new MapReduceTaskData(smallCounter, new long[5]);
+      mappers[i] = new MapReduceTaskData("task-id-"+i, "task-attempt-id-"+i);
+      mappers[i].setTimeAndCounter(new long[5], smallCounter);
     }
     for (; i < numSmallTasks + numLargeTasks; i++) {
-      mappers[i] = new MapReduceTaskData(largeCounter, new long[5]);
+      mappers[i] = new MapReduceTaskData("task-id-"+i, "task-attempt-id-"+i);
+      mappers[i].setTimeAndCounter(new long[5], largeCounter);
     }
+    // Non-sampled task, which does not contain time and counter data
+    mappers[i] = new MapReduceTaskData("task-id-"+i, "task-attempt-id-"+i);
 
     MapReduceApplicationData data = new MapReduceApplicationData().setCounters(jobCounter).setMapperData(mappers);
     HeuristicResult result = _heuristic.apply(data);

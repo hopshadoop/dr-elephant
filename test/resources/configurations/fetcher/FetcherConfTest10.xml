@@ -22,6 +22,7 @@
     <params>
       <sampling_enabled>true</sampling_enabled>
       <history_log_size_limit_in_mb>200</history_log_size_limit_in_mb>
+      <history_server_time_zone>PST</history_server_time_zone>
     </params>
   </fetcher>
 </fetchers>
