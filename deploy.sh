@@ -8,7 +8,7 @@ export HADOOP_HOME=/srv/hops/hadoop
 
 ./compile.sh
 
-scp dist/dr-elephant-2.0.6.zip  glassfish@snurran.sics.se:/var/www/hops
+#scp dist/dr-elephant-2.0.6.zip  glassfish@snurran.sics.se:/var/www/hops
 
 
 

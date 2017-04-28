@@ -16,24 +16,30 @@
 
 package com.linkedin.drelephant.spark.fetchers
 
-import java.io.{File, FileOutputStream, InputStream, OutputStream}
+import java.io.InputStream
+import java.nio.file.Files
 import java.util.Date
 
-import scala.collection.JavaConverters
 import scala.concurrent.{ExecutionContext, Future}
 
-import com.google.common.io.Files
 import com.linkedin.drelephant.analysis.{AnalyticJob, ApplicationType}
 import com.linkedin.drelephant.configurations.fetcher.FetcherConfigurationData
 import com.linkedin.drelephant.spark.data.{SparkLogDerivedData, SparkRestDerivedData}
+import com.linkedin.drelephant.spark.fetchers.SparkFetcher.EventLogSource
 import com.linkedin.drelephant.spark.fetchers.statusapiv1.{ApplicationAttemptInfo, ApplicationInfo}
-import com.linkedin.drelephant.util.SparkUtils
+import com.linkedin.drelephant.spark.legacydata.{MockSparkApplicationData, SparkGeneralData}
+import com.linkedin.drelephant.spark.fetchers.FSFetcher
+import com.linkedin.drelephant.util.{SparkUtils, HadoopUtils}
+import org.apache.hadoop.fs.Path
+import org.apache.log4j.Logger
 import org.apache.spark.SparkConf
+import org.apache.spark.deploy.history.SparkFSFetcher
 import org.apache.spark.scheduler.SparkListenerEnvironmentUpdate
 import org.mockito.Mockito
 import org.scalatest.{FunSpec, Matchers}
+import org.scalatest.mockito.MockitoSugar
 
-class SparkFetcherTest extends FunSpec with Matchers {
+class SparkFetcherTest extends FunSpec with Matchers with MockitoSugar {
   import SparkFetcherTest._
 
   describe("SparkFetcher") {
@@ -69,7 +75,7 @@ class SparkFetcherTest extends FunSpec with Matchers {
       val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
         override lazy val sparkConf = new SparkConf()
         override lazy val sparkRestClient = newFakeSparkRestClient(appId, Future(restDerivedData))
-        override lazy val sparkLogClient = Some(newFakeSparkLogClient(appId, Some("2"), Future(logDerivedData)))
+        override lazy val sparkLogClient = newFakeSparkLogClient(appId, Some("2"), Future(logDerivedData))
       }
       val data = sparkFetcher.fetchData(analyticJob)
       data.appId should be(appId)
@@ -79,7 +85,7 @@ class SparkFetcherTest extends FunSpec with Matchers {
       val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
         override lazy val sparkConf = new SparkConf()
         override lazy val sparkRestClient = newFakeSparkRestClient(appId, Future { throw new Exception() })
-        override lazy val sparkLogClient = Some(newFakeSparkLogClient(appId, Some("2"), Future(logDerivedData)))
+        override lazy val sparkLogClient = newFakeSparkLogClient(appId, Some("2"), Future(logDerivedData))
       }
 
       an[Exception] should be thrownBy { sparkFetcher.fetchData(analyticJob) }
@@ -88,30 +94,34 @@ class SparkFetcherTest extends FunSpec with Matchers {
     it("throws an exception if the log client fails") {
       val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
         override lazy val sparkConf = new SparkConf()
+          .set(SparkFetcher.SPARK_EVENT_LOG_ENABLED_KEY, "true")
         override lazy val sparkRestClient = newFakeSparkRestClient(appId, Future(restDerivedData))
-        override lazy val sparkLogClient = Some(newFakeSparkLogClient(appId, Some("2"), Future { throw new Exception() }))
+        override lazy val sparkLogClient = newFakeSparkLogClient(appId, Some("2"), Future { throw new Exception() })
       }
 
       an[Exception] should be thrownBy { sparkFetcher.fetchData(analyticJob) }
     }
 
     it("gets its SparkConf when SPARK_CONF_DIR is set") {
-      val tempDir = Files.createTempDir()
+      val tempDir = Files.createTempDirectory(null)
 
       val testResourceIn = getClass.getClassLoader.getResourceAsStream("spark-defaults.conf")
-      val testResourceFile = new File(tempDir, "spark-defaults.conf")
-      val testResourceOut = new FileOutputStream(testResourceFile)
-      managedCopyInputStreamToOutputStream(testResourceIn, testResourceOut)
+      val testResourceFile = tempDir.resolve("spark-defaults.conf")
+      Files.copy(testResourceIn, testResourceFile)
 
       val fetcherConfigurationData = newFakeFetcherConfigurationData()
       val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
         override lazy val sparkUtils = new SparkUtils() {
-          override val defaultEnv = Map("SPARK_CONF_DIR" -> tempDir.toString)
+          override lazy val logger = mock[Logger]
+          override lazy val hadoopUtils = mock[HadoopUtils]
+          override lazy val defaultEnv = Map("SPARK_CONF_DIR" -> tempDir.toString)
         }
       }
       val sparkConf = sparkFetcher.sparkConf
 
-      tempDir.delete()
+      testResourceIn.close()
+      Files.delete(testResourceFile)
+      Files.delete(tempDir)
 
       sparkConf.get("spark.yarn.historyServer.address") should be("10.0.2.15:18080")
       sparkConf.get("spark.eventLog.enabled") should be("true")
@@ -120,24 +130,27 @@ class SparkFetcherTest extends FunSpec with Matchers {
     }
 
     it("gets its SparkConf when SPARK_HOME is set") {
-      val tempDir = Files.createTempDir()
-      val tempConfDir = new File(tempDir, "conf")
-      tempConfDir.mkdir()
+      val tempDir = Files.createTempDirectory(null)
+      val tempConfDir = Files.createDirectory(tempDir.resolve("conf"))
 
       val testResourceIn = getClass.getClassLoader.getResourceAsStream("spark-defaults.conf")
-      val testResourceFile = new File(tempConfDir, "spark-defaults.conf")
-      val testResourceOut = new FileOutputStream(testResourceFile)
-      managedCopyInputStreamToOutputStream(testResourceIn, testResourceOut)
+      val testResourceFile = tempConfDir.resolve("spark-defaults.conf")
+      Files.copy(testResourceIn, testResourceFile)
 
       val fetcherConfigurationData = newFakeFetcherConfigurationData()
       val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
         override lazy val sparkUtils = new SparkUtils() {
-          override val defaultEnv = Map("SPARK_HOME" -> tempDir.toString)
+          override lazy val logger = mock[Logger]
+          override lazy val hadoopUtils = mock[HadoopUtils]
+          override lazy val defaultEnv = Map("SPARK_HOME" -> tempDir.toString)
         }
       }
       val sparkConf = sparkFetcher.sparkConf
 
-      tempDir.delete()
+      testResourceIn.close()
+      Files.delete(testResourceFile)
+      Files.delete(tempConfDir)
+      Files.delete(tempDir)
 
       sparkConf.get("spark.yarn.historyServer.address") should be("10.0.2.15:18080")
       sparkConf.get("spark.eventLog.enabled") should be("true")
@@ -148,18 +161,65 @@ class SparkFetcherTest extends FunSpec with Matchers {
     it("throws an exception if neither SPARK_CONF_DIR nor SPARK_HOME are set") {
       val fetcherConfigurationData = newFakeFetcherConfigurationData()
       val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
-        override lazy val sparkUtils = new SparkUtils() { override val defaultEnv = Map.empty[String, String] }
+        override lazy val sparkUtils = new SparkUtils() {
+          override lazy val logger = mock[Logger]
+          override lazy val hadoopUtils = mock[HadoopUtils]
+          override lazy val defaultEnv = Map.empty[String, String]
+        }
       }
+
       an[IllegalStateException] should be thrownBy { sparkFetcher.sparkConf }
+    }
+
+    it("eventlog source defaults to WebHDFS") {
+      val fetcherConfigurationData = newFakeFetcherConfigurationData()
+      val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
+        override lazy val sparkConf: SparkConf = new SparkConf()
+          .set(SparkFetcher.SPARK_EVENT_LOG_ENABLED_KEY, "true")
+      }
+
+      sparkFetcher.eventLogSource should be(EventLogSource.WebHdfs)
+    }
+
+    it("eventlog source is WebHDFS if use_rest_for_eventlogs is false") {
+      val fetcherConfigurationData = newFakeFetcherConfigurationData(
+        Map("use_rest_for_eventlogs" -> "false"))
+      val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
+        override lazy val sparkConf: SparkConf = new SparkConf()
+          .set(SparkFetcher.SPARK_EVENT_LOG_ENABLED_KEY, "true")
+      }
+
+      sparkFetcher.eventLogSource should be(EventLogSource.WebHdfs)
+    }
+
+    it("eventlog source is REST if use_rest_for_eventlogs is true") {
+      val fetcherConfigurationData = newFakeFetcherConfigurationData(
+        Map("use_rest_for_eventlogs" -> "true"))
+      val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
+        override lazy val sparkConf: SparkConf = new SparkConf()
+          .set(SparkFetcher.SPARK_EVENT_LOG_ENABLED_KEY, "true")
+      }
+
+      sparkFetcher.eventLogSource should be(EventLogSource.Rest)
+    }
+
+    it("eventlog fetching is disabled when spark.eventLog is false") {
+      val fetcherConfigurationData = newFakeFetcherConfigurationData()
+      val sparkFetcher = new SparkFetcher(fetcherConfigurationData) {
+        override lazy val sparkConf: SparkConf = new SparkConf()
+          .set(SparkFetcher.SPARK_EVENT_LOG_ENABLED_KEY, "false")
+      }
+
+      sparkFetcher.eventLogSource should be(EventLogSource.None)
     }
   }
 }
 
 object SparkFetcherTest {
-  import JavaConverters._
+  import scala.collection.JavaConverters._
 
-  def newFakeFetcherConfigurationData(): FetcherConfigurationData =
-    new FetcherConfigurationData(classOf[SparkFetcher].getName, new ApplicationType("SPARK"), Map.empty.asJava)
+  def newFakeFetcherConfigurationData(paramMap: Map[String, String] = Map.empty): FetcherConfigurationData =
+    new FetcherConfigurationData(classOf[SparkFetcher].getName, new ApplicationType("SPARK"), paramMap.asJava)
 
   def newFakeApplicationAttemptInfo(
     attemptId: Option[String],
@@ -194,22 +254,5 @@ object SparkFetcherTest {
     val sparkLogClient = Mockito.mock(classOf[SparkLogClient])
     Mockito.when(sparkLogClient.fetchData(appId, attemptId)).thenReturn(logDerivedData)
     sparkLogClient
-  }
-
-  def managedCopyInputStreamToOutputStream(in: => InputStream, out: => OutputStream): Unit = {
-    for {
-      input <- resource.managed(in)
-      output <- resource.managed(out)
-    } {
-      val buffer = new Array[Byte](512)
-      def read(): Unit = input.read(buffer) match {
-        case -1 => ()
-        case bytesRead => {
-          output.write(buffer, 0, bytesRead)
-          read()
-        }
-      }
-      read()
-    }
   }
 }

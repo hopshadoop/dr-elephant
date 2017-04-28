@@ -14,14 +14,25 @@
  * the License.
  */
 
-package com.linkedin.drelephant.spark.data
+package com.linkedin.drelephant.spark.legacydata;
 
-import com.linkedin.drelephant.spark.fetchers.statusapiv1.{ApplicationInfo, ExecutorSummary, JobData, StageData}
+import com.linkedin.drelephant.analysis.HadoopApplicationData;
 
 
-case class SparkRestDerivedData(
-  applicationInfo: ApplicationInfo,
-  jobDatas: Seq[JobData],
-  stageDatas: Seq[StageData],
-  executorSummaries: Seq[ExecutorSummary],
-  private[spark] val logDerivedData: Option[SparkLogDerivedData] = None)
+/**
+ * This holds a collection of all SparkApplicationData
+ */
+public interface SparkApplicationData extends HadoopApplicationData {
+
+  public boolean isThrottled();
+
+  public SparkGeneralData getGeneralData();
+
+  public SparkEnvironmentData getEnvironmentData();
+
+  public SparkExecutorData getExecutorData();
+
+  public SparkJobProgressData getJobProgressData();
+
+  public SparkStorageData getStorageData();
+}
