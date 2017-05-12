@@ -93,5 +93,31 @@
        <event_log_dir>/user/glassfish/applicationHistory</event_log_dir>
     </params> 
    </fetcher>
+  </fetcher>
+
+  <!--
+  This is an experimental fetcher for Spark applications which uses SHS REST API to get application metrics
+  and WebHDFS to get application properties from eventlogs.
+
+   <fetcher>
+    <applicationtype>spark</applicationtype>
+    <classname>com.linkedin.drelephant.spark.fetchers.SparkFetcher</classname>
+  </fetcher>
+
+  Param Description (Requires Spark >= 1.5.0):
+  *use_rest_for_eventlogs* enables the fetcher to get eventlogs via SHS REST API to derive application properties.
+  *should_process_logs_locally* if use_rest_for_eventlogs is true, then enabling this flag will enable fetcher to just
+  get eventlogs via SHS REST API and derives application metrics and properties from eventlogs.
+  Therefore, fetcher does not use other REST calls, which may have significant memory overhead on SHS.
+
+  <fetcher>
+    <applicationtype>spark</applicationtype>
+    <classname>com.linkedin.drelephant.spark.fetchers.SparkFetcher</classname>
+    <params>
+      <use_rest_for_eventlogs>true</use_rest_for_eventlogs>
+      <should_process_logs_locally>true</should_process_logs_locally>
+    </params>
+  </fetcher>
+  -->
 </fetchers>
 

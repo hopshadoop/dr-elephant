@@ -18,8 +18,11 @@ package com.linkedin.drelephant.spark.fetchers
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InputStream}
 import java.text.SimpleDateFormat
-import java.util.zip.{ZipEntry, ZipOutputStream}
+import java.util.zip.{ZipInputStream, ZipEntry, ZipOutputStream}
 import java.util.{Calendar, Date, SimpleTimeZone}
+import javax.ws.rs.client.WebTarget
+
+import org.apache.spark.status.api.v1.StageStatus
 
 import scala.concurrent.ExecutionContext
 import scala.util.Try
@@ -32,11 +35,10 @@ import javax.ws.rs.ext.ContextResolver
 
 import com.google.common.io.Resources
 import com.ning.compress.lzf.LZFEncoder
-import org.apache.spark.SparkConf
+import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.glassfish.jersey.client.ClientConfig
 import org.glassfish.jersey.server.ResourceConfig
 import org.glassfish.jersey.test.{JerseyTest, TestProperties}
-import org.json4s.DefaultFormats
 import org.scalatest.{AsyncFunSpec, Matchers}
 import org.scalatest.compatible.Assertion
 
@@ -59,7 +61,6 @@ class SparkRestClientTest extends AsyncFunSpec with Matchers {
           case config => config
         }
       }
-
       fakeJerseyServer.setUp()
 
       val historyServerUri = fakeJerseyServer.target.getUri
@@ -77,15 +78,87 @@ class SparkRestClientTest extends AsyncFunSpec with Matchers {
       } flatMap {
         case assertion: Try[Assertion] => assertion
         case _ =>
-          val expectedLogDerivedData =
-            SparkLogClient.findDerivedData(new ByteArrayInputStream(EVENT_LOG_2))
-
           sparkRestClient.fetchData(FetchClusterModeDataFixtures.APP_ID, fetchLogs = true)
-            .map { _.logDerivedData should be(Some(expectedLogDerivedData)) }
+            .map { _.logDerivedData.get.appConfigurationProperties should be(EXPECTED_PROPERTIES_FROM_LOG_1) }
       } andThen { case assertion: Try[Assertion] =>
         fakeJerseyServer.tearDown()
         assertion
       }
+    }
+
+    it("returns the desired SparkApplicationData using Spark REST API based eventlog for cluster mode application") {
+      import ExecutionContext.Implicits.global
+      val fakeJerseyServer = new FakeJerseyServer() {
+        override def configure(): Application = super.configure() match {
+          case resourceConfig: ResourceConfig =>
+            resourceConfig
+              .register(classOf[FetchClusterModeDataFixtures.ApiResource])
+              .register(classOf[FetchClusterModeDataFixtures.LogsResource])
+          case config => config
+        }
+      }
+      fakeJerseyServer.setUp()
+
+      val historyServerUri = fakeJerseyServer.target.getUri
+
+      val sparkConf = new SparkConf().set("spark.yarn.historyServer.address", s"${historyServerUri.getHost}:${historyServerUri.getPort}")
+      val sparkRestClient = new SparkRestClient(sparkConf)
+      val sparkApplicationData = sparkRestClient.fetchEventLogAndParse(FetchClusterModeDataFixtures.APP_ID)
+
+      sparkApplicationData.applicationInfo.id should be("application_1457600942802_0093")
+      sparkApplicationData.applicationInfo.name should be("PythonPi")
+      sparkApplicationData.jobDatas.size should be (1)
+      sparkApplicationData.stageDatas.size should be (1)
+      sparkApplicationData.executorSummaries.size should be(3)
+      sparkApplicationData.appConfigurationProperties.size should be(6)
+      sparkApplicationData.jobDatas(0).jobId should be(0)
+      sparkApplicationData.jobDatas(0).numCompletedTasks should be(10)
+      sparkApplicationData.jobDatas(0).numCompletedStages should be(1)
+      sparkApplicationData.jobDatas(0).status should be(JobExecutionStatus.SUCCEEDED)
+      sparkApplicationData.stageDatas(0).stageId should be(0)
+      sparkApplicationData.stageDatas(0).status should be(StageStatus.COMPLETE)
+      sparkApplicationData.stageDatas(0).numCompleteTasks should be(10)
+      sparkApplicationData.stageDatas(0).executorRunTime should be(2470)
+      sparkApplicationData.stageDatas(0).name should be("reduce at pi.py:39")
+      sparkApplicationData.executorSummaries(0).id should be("1")
+      sparkApplicationData.executorSummaries(1).id should be("2")
+      sparkApplicationData.executorSummaries(2).id should be("driver")
+      sparkApplicationData.executorSummaries(0).hostPort should be(".hello.com:38464")
+      sparkApplicationData.executorSummaries(1).hostPort should be(".hello.com:36478")
+      sparkApplicationData.executorSummaries(2).hostPort should be("10.20.0.71:58838")
+      sparkApplicationData.executorSummaries(0).maxMemory should be(2223023063L)
+      sparkApplicationData.executorSummaries(1).maxMemory should be(2223023063L)
+      sparkApplicationData.executorSummaries(2).maxMemory should be(1111794647L)
+      sparkApplicationData.executorSummaries(0).totalTasks should be(5)
+      sparkApplicationData.executorSummaries(1).totalTasks should be(5)
+      sparkApplicationData.executorSummaries(2).totalTasks should be(0)
+      sparkApplicationData.appConfigurationProperties should be(EXPECTED_PROPERTIES_FROM_LOG_1)
+    }
+
+    it("throws RunTimeException when eventlog name ends with .inprogress") {
+      import ExecutionContext.Implicits.global
+      val fakeJerseyServer = new FakeJerseyServer() {
+        override def configure(): Application = super.configure() match {
+          case resourceConfig: ResourceConfig =>
+            resourceConfig
+              .register(classOf[FetchClusterModeDataFixtures.ApiResource])
+              .register(classOf[FetchClusterModeDataFixtures.LogsResource])
+          case config => config
+        }
+      }
+      fakeJerseyServer.setUp()
+
+      val historyServerUri = fakeJerseyServer.target.getUri
+
+      val sparkConf = new SparkConf().set("spark.yarn.historyServer.address", s"${historyServerUri.getHost}:${historyServerUri.getPort}")
+      val sparkRestClient = new SparkRestClient(sparkConf) {
+        override def getApplicationLogs(logTarget: WebTarget): ZipInputStream = {
+          new ZipInputStream(newFakeLog(FetchClusterModeDataFixtures.APP_ID, None, ".inprogress"))
+        }
+      }
+
+      val thrown = the[RuntimeException] thrownBy(sparkRestClient.fetchEventLogAndParse(FetchClusterModeDataFixtures.APP_ID))
+      thrown.getMessage should be (s"Application for the log application_1.lzf.inprogress has not finished yet.")
     }
 
     it("returns the desired data from the Spark REST API for client mode application") {
@@ -121,11 +194,8 @@ class SparkRestClientTest extends AsyncFunSpec with Matchers {
       } flatMap {
         case assertion: Try[Assertion] => assertion
         case _ =>
-          val expectedLogDerivedData =
-            SparkLogClient.findDerivedData(new ByteArrayInputStream(EVENT_LOG_2))
-
           sparkRestClient.fetchData(FetchClientModeDataFixtures.APP_ID, fetchLogs = true)
-            .map { _.logDerivedData should be(Some(expectedLogDerivedData)) }
+            .map { _.logDerivedData.get.appConfigurationProperties should be(EXPECTED_PROPERTIES_FROM_LOG_1) }
       } andThen { case assertion: Try[Assertion] =>
         fakeJerseyServer.tearDown()
         assertion
@@ -374,16 +444,25 @@ object SparkRestClientTest {
     completed = true
   )
 
-  private val EVENT_LOG_2 = Resources.toByteArray(
-    Resources.getResource("spark_event_logs/event_log_2"))
+  private val EVENT_LOG_1 = Resources.toByteArray(
+    Resources.getResource("spark_event_logs/event_log_1"))
 
-  def newFakeLog(appId: String, attemptId: Option[String]): InputStream = {
+  private val EXPECTED_PROPERTIES_FROM_LOG_1 = Map(
+    "spark.serializer" -> "org.apache.spark.serializer.KryoSerializer",
+    "spark.storage.memoryFraction" -> "0.3",
+    "spark.driver.memory" -> "2G",
+    "spark.executor.instances" -> "900",
+    "spark.executor.memory" -> "1g",
+    "spark.shuffle.memoryFraction" -> "0.5"
+  )
+
+  def newFakeLog(appId: String, attemptId: Option[String], inProgress: String = ""): InputStream = {
     val os = new ByteArrayOutputStream()
     val zos = new ZipOutputStream(os)
-    val name = attemptId.map(id => s"${appId}_$id").getOrElse(appId) + ".lzf"
+    val name = attemptId.map(id => s"${appId}_$id").getOrElse(appId) + ".lzf" + inProgress
     zos.putNextEntry(new ZipEntry(name))
     // LZFEncoder instead of Snappy, because of xerial/snappy-java#76.
-    zos.write(LZFEncoder.encode(EVENT_LOG_2))
+    zos.write(LZFEncoder.encode(EVENT_LOG_1))
     zos.closeEntry()
     zos.close()
 
